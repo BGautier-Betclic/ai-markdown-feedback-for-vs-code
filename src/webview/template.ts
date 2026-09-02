@@ -1,13 +1,38 @@
+export interface QuickNoteOption {
+  key: string;
+  emoji: string;
+  text: string;
+}
+
 export interface WebviewOptions {
   body: string;
   highlightColor: string;
   showGutter: boolean;
   cspSource: string;
   nonce: string;
+  quickNotes: QuickNoteOption[];
+}
+
+/** Safe to embed in an inline <script>: JSON with no closing-tag sequence. */
+function toScriptJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e');
+}
+
+function escapeAttr(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export function getWebviewContent(options: WebviewOptions): string {
-  const { body, highlightColor, showGutter, cspSource, nonce } = options;
+  const { body, highlightColor, showGutter, cspSource, nonce, quickNotes } = options;
+  const quickLegend = quickNotes
+    .map((note) => `${escapeAttr(note.key)} ${escapeAttr(note.emoji)}`)
+    .join(' &middot; ');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -297,6 +322,51 @@ export function getWebviewContent(options: WebviewOptions): string {
       min-width: 80px;
       flex-shrink: 0;
     }
+    /* --- Quick-reply legend --- */
+    #ace-quick-legend {
+      display: flex;
+      align-items: center;
+      margin-left: 8px;
+      font-size: 11px;
+      opacity: 0.55;
+      white-space: nowrap;
+    }
+
+    /* --- Hover action bar on an existing annotation --- */
+    #ace-actions {
+      position: absolute;
+      display: none;
+      gap: 2px;
+      padding: 2px;
+      background: var(--vscode-editorWidget-background, #252526);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      z-index: 200;
+    }
+    #ace-actions.show { display: flex; }
+    .ace-action-btn {
+      border: none;
+      background: transparent;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1;
+      padding: 3px 5px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .ace-action-btn:hover {
+      background: var(--vscode-toolbar-hoverBackground, rgba(255,255,255,0.12));
+    }
+
+    /* A comment whose text opens with an emoji is a quick reply. */
+    .ace-comment--quick .ace-comment-icon {
+      vertical-align: baseline;
+      opacity: 1;
+      font-size: 1em;
+    }
+
     .ace-summary-type.highlight { color: #f9a825; }
     .ace-summary-type.comment { color: #3794ff; }
     .ace-summary-type.edit { color: #f9a825; }
@@ -331,7 +401,13 @@ export function getWebviewContent(options: WebviewOptions): string {
       <span class="ace-btn-icon">&#x2716;</span>
       <span>Clear All</span>
     </button>
+    <span id="ace-quick-legend" title="Quick replies — press the key in the preview">${quickLegend}</span>
     <span id="ace-saved">Saved</span>
+  </div>
+
+  <div id="ace-actions">
+    <button class="ace-action-btn" data-action="edit" title="Edit this comment">&#x270F;&#xFE0F;</button>
+    <button class="ace-action-btn" data-action="delete" title="Remove this annotation">&#x2716;</button>
   </div>
 
   <div id="ace-content">
@@ -343,6 +419,7 @@ export function getWebviewContent(options: WebviewOptions): string {
   <script nonce="${nonce}">
     (function() {
       const vscode = acquireVsCodeApi();
+      const QUICK_NOTES = ${toScriptJson(quickNotes)};
       let previewRange = null;
       let previewText = '';
 
@@ -492,20 +569,36 @@ export function getWebviewContent(options: WebviewOptions): string {
         // For comment/edit without selection, find the cursor's nearest block line
         var range = previewRange;
         if (!range && (command === 'insertComment' || command === 'insertEdit')) {
-          var sel = window.getSelection();
-          if (sel && sel.rangeCount > 0) {
-            var cursorNode = sel.getRangeAt(0).startContainer;
-            var el = closestMappedElement(cursorNode);
-            if (el) {
-              var line = Number(el.getAttribute('data-source-line')) || 1;
-              range = { start: { line: line, column: 1 }, end: { line: line, column: 1 } };
-            }
-          }
+          range = cursorLineRange();
         }
 
         vscode.postMessage({
           type: 'preview.applyAnnotation',
           annotation: annotation,
+          range: range,
+          text: previewText,
+        });
+      }
+
+      /** Line-only range at the caret, for annotations that need no selection. */
+      function cursorLineRange() {
+        var sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return null;
+        var el = closestMappedElement(sel.getRangeAt(0).startContainer);
+        if (!el) return null;
+        var line = Number(el.getAttribute('data-source-line')) || 1;
+        return { start: { line: line, column: 1 }, end: { line: line, column: 1 } };
+      }
+
+      /** One-keystroke canned comment, e.g. %%✅ oui%%. */
+      function sendQuickNote(key) {
+        var range = previewRange || cursorLineRange();
+        if (!range) return;
+
+        vscode.postMessage({
+          type: 'preview.applyAnnotation',
+          annotation: 'quick',
+          quickKey: key,
           range: range,
           text: previewText,
         });
@@ -548,10 +641,93 @@ export function getWebviewContent(options: WebviewOptions): string {
 
         var key = e.key.toLowerCase();
         var btn = document.querySelector('.ace-toolbar-btn[data-key="' + key + '"]');
-        if (!btn) return;
+        if (btn) {
+          e.preventDefault();
+          sendCommand(btn.getAttribute('data-command'));
+          return;
+        }
+
+        // Toolbar keys win; quick replies take what is left.
+        var quick = QUICK_NOTES.filter(function(note) { return note.key === key; })[0];
+        if (!quick) return;
 
         e.preventDefault();
-        sendCommand(btn.getAttribute('data-command'));
+        sendQuickNote(quick.key);
+      });
+
+      // --- Hover action bar: edit / remove an existing annotation ---
+
+      var actionsEl = document.getElementById('ace-actions');
+      var actionEditBtn = actionsEl.querySelector('[data-action="edit"]');
+      var actionTarget = null;
+
+      function readTarget(el) {
+        if (el.classList.contains('ace-comment')) {
+          var pos = (el.getAttribute('data-source-pos') || '').split(':');
+          return {
+            kind: 'comment',
+            line: Number(el.getAttribute('data-source-line')) || 0,
+            startColumn: Number(pos[0]) || 1,
+            endColumn: Number(pos[1]) || 1,
+            oldText: el.getAttribute('data-comment') || '',
+            canEdit: true
+          };
+        }
+        // Highlights and deletions carry the marker-inclusive span.
+        var raw = (el.getAttribute('data-source-raw-pos') || '').split(':');
+        return {
+          kind: el.tagName === 'MARK' ? 'highlight' : 'strike',
+          line: Number(el.getAttribute('data-source-line')) || 0,
+          startColumn: Number(raw[0]) || 1,
+          endColumn: Number(raw[1]) || 1,
+          oldText: el.textContent || '',
+          canEdit: false
+        };
+      }
+
+      function hideActions() {
+        actionTarget = null;
+        actionsEl.classList.remove('show');
+      }
+
+      function showActionsFor(el) {
+        var target = readTarget(el);
+        if (!target.line || target.endColumn <= target.startColumn) { hideActions(); return; }
+
+        actionTarget = target;
+        actionEditBtn.style.display = target.canEdit ? '' : 'none';
+        actionsEl.classList.add('show');
+
+        var box = el.getBoundingClientRect();
+        actionsEl.style.left = (box.left + window.scrollX) + 'px';
+        actionsEl.style.top = Math.max(0, box.top + window.scrollY - actionsEl.offsetHeight - 2) + 'px';
+      }
+
+      document.addEventListener('mouseover', function(e) {
+        var el = e.target && e.target.closest
+          ? e.target.closest('#ace-actions, .ace-comment, mark.ace-highlight, s.ace-deletion')
+          : null;
+        if (!el) { hideActions(); return; }
+        if (el.id === 'ace-actions') return;
+        showActionsFor(el);
+      });
+
+      actionsEl.querySelectorAll('.ace-action-btn').forEach(function(btn) {
+        btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        btn.addEventListener('click', function() {
+          if (!actionTarget) return;
+          var isEdit = btn.getAttribute('data-action') === 'edit';
+          var message = {
+            type: isEdit ? 'preview.editAnnotation' : 'preview.deleteAnnotation',
+            kind: actionTarget.kind,
+            line: actionTarget.line,
+            startColumn: actionTarget.startColumn,
+            endColumn: actionTarget.endColumn,
+            oldText: actionTarget.oldText
+          };
+          hideActions();
+          vscode.postMessage(message);
+        });
       });
 
       // --- Listen for messages from extension ---
