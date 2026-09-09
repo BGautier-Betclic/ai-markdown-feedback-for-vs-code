@@ -104,7 +104,7 @@ export function replaceCommentText(lineText: string, range: MarkerRange, newText
   return lineText.slice(0, range.start) + `%%${newText}%%` + lineText.slice(range.end);
 }
 
-/** Render a quick reply as comment source: `%%✅ oui%%`. */
+/** Render a quick reply as comment source: `%%✅ yes%%`. */
 export function formatQuickNote(emoji: string, text: string): string {
   const body = [emoji, text].filter((part) => part && part.trim().length > 0).join(' ').trim();
   return `%%${body}%%`;

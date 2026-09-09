@@ -590,7 +590,7 @@ export function getWebviewContent(options: WebviewOptions): string {
         return { start: { line: line, column: 1 }, end: { line: line, column: 1 } };
       }
 
-      /** One-keystroke canned comment, e.g. %%✅ oui%%. */
+      /** One-keystroke canned comment, e.g. %%✅ yes%%. */
       function sendQuickNote(key) {
         var range = previewRange || cursorLineRange();
         if (!range) return;

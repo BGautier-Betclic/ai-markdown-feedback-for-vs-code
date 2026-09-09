@@ -180,12 +180,12 @@
         },
         "acemd.quickNotes": {
           "type": "array",
-          "markdownDescription": "One-keystroke canned comments in the preview. Each entry needs a single-character `key`, an `emoji` (the verdict) and a `text`. Inserted as a normal comment, e.g. `%%✅ oui%%`. Keys already taken by the toolbar (`h`, `c`, `e`, `d`) are ignored.",
+          "markdownDescription": "One-keystroke canned comments in the preview. Each entry needs a single-character `key`, an `emoji` (the verdict) and a `text`. Inserted as a normal comment, e.g. `%%✅ yes%%`. Keys already taken by the toolbar (`h`, `c`, `e`, `d`) are ignored.",
           "default": [
-            { "key": "o", "emoji": "✅", "text": "oui" },
+            { "key": "y", "emoji": "✅", "text": "yes" },
             { "key": "k", "emoji": "👍", "text": "ok" },
-            { "key": "n", "emoji": "❌", "text": "non" },
-            { "key": "r", "emoji": "🔁", "text": "reformule plus clairement" }
+            { "key": "n", "emoji": "❌", "text": "no" },
+            { "key": "r", "emoji": "🔁", "text": "rephrase more clearly" }
           ],
           "items": {
             "type": "object",

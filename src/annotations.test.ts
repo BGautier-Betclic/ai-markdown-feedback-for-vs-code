@@ -54,8 +54,8 @@ test('deleting a comment absorbs the space before it', () => {
 });
 
 test('deleting a comment at end of line absorbs the trailing space instead', () => {
-  const line = 'Kafka here. %%oui%%';
-  const range = resolveMarkerRange(line, line.indexOf('%%') + 1, line.length + 1, 'comment', 'oui')!;
+  const line = 'Kafka here. %%yes%%';
+  const range = resolveMarkerRange(line, line.indexOf('%%') + 1, line.length + 1, 'comment', 'yes')!;
   assert.equal(deleteMarker(line, range, 'comment'), 'Kafka here.');
 });
 
@@ -74,22 +74,22 @@ test('deleting a strikethrough unwraps it and keeps the text', () => {
 });
 
 test('replacing a comment keeps its position', () => {
-  const line = 'Kafka here. %%oui%% Rest of line.';
-  const range = resolveMarkerRange(line, line.indexOf('%%') + 1, line.indexOf('%%') + 8, 'comment', 'oui')!;
-  assert.equal(replaceCommentText(line, range, '❌ non'), 'Kafka here. %%❌ non%% Rest of line.');
+  const line = 'Kafka here. %%yes%% Rest of line.';
+  const range = resolveMarkerRange(line, line.indexOf('%%') + 1, line.indexOf('%%') + 8, 'comment', 'yes')!;
+  assert.equal(replaceCommentText(line, range, '❌ no'), 'Kafka here. %%❌ no%% Rest of line.');
 });
 
 test('formats a quick note, tolerating a missing emoji or text', () => {
-  assert.equal(formatQuickNote('✅', 'oui'), '%%✅ oui%%');
-  assert.equal(formatQuickNote('', 'oui'), '%%oui%%');
+  assert.equal(formatQuickNote('✅', 'yes'), '%%✅ yes%%');
+  assert.equal(formatQuickNote('', 'yes'), '%%yes%%');
   assert.equal(formatQuickNote('✅', ''), '%%✅%%');
 });
 
 test('recognises a quick note by its leading emoji', () => {
-  assert.deepEqual(parseQuickNote('✅ oui'), { emoji: '✅', text: 'oui' });
-  assert.deepEqual(parseQuickNote('🔁 reformule plus clairement'), {
+  assert.deepEqual(parseQuickNote('✅ yes'), { emoji: '✅', text: 'yes' });
+  assert.deepEqual(parseQuickNote('🔁 rephrase more clearly'), {
     emoji: '🔁',
-    text: 'reformule plus clairement',
+    text: 'rephrase more clearly',
   });
   assert.equal(parseQuickNote('this is a normal comment'), null);
 });

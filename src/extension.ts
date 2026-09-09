@@ -24,9 +24,9 @@ that precedes it. It is a normal \`%%comment%%\`, so the rules below apply uncha
 
 | Marker | Meaning |
 |--------|---------|
-| \`%%✅ oui%%\`, \`%%👍 ok%%\` | Validated — nothing to change here |
-| \`%%❌ non%%\` | The preceding passage is rejected — fix it, or ask if the fix is not obvious |
-| \`%%🔁 reformule plus clairement%%\` | Rewrite the preceding passage more clearly |
+| \`%%✅ yes%%\`, \`%%👍 ok%%\` | Validated — nothing to change here |
+| \`%%❌ no%%\` | The preceding passage is rejected — fix it, or ask if the fix is not obvious |
+| \`%%🔁 rephrase more clearly%%\` | Rewrite the preceding passage more clearly |
 
 ## Rules
 

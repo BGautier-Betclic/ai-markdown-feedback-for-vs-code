@@ -4,8 +4,8 @@
 
 Local fork. Annotations can now be answered in one keystroke, edited, and removed one at a time.
 
-- Add quick replies: press `o` / `k` / `n` / `r` in the preview to insert `%%✅ oui%%`, `%%👍 ok%%`,
-  `%%❌ non%%`, `%%🔁 reformule plus clairement%%`. A quick reply is a normal comment with an emoji verdict,
+- Add quick replies: press `y` / `k` / `n` / `r` in the preview to insert `%%✅ yes%%`, `%%👍 ok%%`,
+  `%%❌ no%%`, `%%🔁 rephrase more clearly%%`. A quick reply is a normal comment with an emoji verdict,
   so no new syntax reaches the LLM. Configurable with the new `acemd.quickNotes` setting; a legend in the
   toolbar shows the active keys
 - Add a hover action bar on existing annotations: ✏️ edits a comment (input box pre-filled; submit empty to

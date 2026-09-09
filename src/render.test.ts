@@ -28,11 +28,11 @@ test('a comment carries the source span covering its %% markers', () => {
 });
 
 test('a quick reply renders its emoji as the icon and gets its own class', () => {
-  const html = render('Kafka here. %%✅ oui%%');
+  const html = render('Kafka here. %%✅ yes%%');
   assert.match(html, /class="ace-comment ace-comment--quick"/);
   assert.match(html, /<span class="ace-comment-icon">✅<\/span>/);
   // data-comment keeps the full text — it is what identifies the annotation.
-  assert.match(html, /data-comment="✅ oui"/);
+  assert.match(html, /data-comment="✅ yes"/);
 });
 
 test('a plain comment keeps the generic icon', () => {
@@ -54,11 +54,11 @@ test('the webview exposes the quick notes and the action bar', () => {
     showGutter: true,
     cspSource: 'vscode-resource:',
     nonce: 'deadbeef',
-    quickNotes: [{ key: 'o', emoji: '✅', text: 'oui' }],
+    quickNotes: [{ key: 'y', emoji: '✅', text: 'yes' }],
   });
-  assert.match(html, /const QUICK_NOTES = \[\{"key":"o"/);
+  assert.match(html, /const QUICK_NOTES = \[\{"key":"y"/);
   assert.match(html, /id="ace-actions"/);
-  assert.match(html, /id="ace-quick-legend"[^>]*>o ✅</);
+  assert.match(html, /id="ace-quick-legend"[^>]*>y ✅</);
   // Nothing in the injected JSON may close the script element.
   assert.doesNotMatch(html.split('QUICK_NOTES = ')[1].split(';')[0], /<\/script/i);
 });

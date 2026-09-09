@@ -22,10 +22,10 @@ export interface QuickNote {
 }
 
 const DEFAULT_QUICK_NOTES: QuickNote[] = [
-  { key: 'o', emoji: '✅', text: 'oui' },
+  { key: 'y', emoji: '✅', text: 'yes' },
   { key: 'k', emoji: '👍', text: 'ok' },
-  { key: 'n', emoji: '❌', text: 'non' },
-  { key: 'r', emoji: '🔁', text: 'reformule plus clairement' },
+  { key: 'n', emoji: '❌', text: 'no' },
+  { key: 'r', emoji: '🔁', text: 'rephrase more clearly' },
 ];
 
 export function getQuickNotes(uri: vscode.Uri): QuickNote[] {
