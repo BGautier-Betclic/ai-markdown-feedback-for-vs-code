@@ -20,8 +20,34 @@ Ace adds four annotation types to your Markdown files, all stored as plain-text 
 | `%%your note here%%` | Leave a comment for the LLM | Hidden in preview; icon on hover |
 | `> [!EDIT] Change X to Y` | Specific edit request | Styled callout block |
 | `~~remove this~~` | Suggest deletion | Red strikethrough |
+| `%%✅ yes%%` | Quick reply — one keystroke | Emoji verdict inline |
 
 Any LLM can parse these annotations directly from the `.md` source.
+
+## Quick Replies
+
+The most frequent feedback is the shortest, so it should cost one keystroke. In the preview, press:
+
+| Key | Inserted |
+|-----|----------|
+| `y` | `%%✅ yes%%` |
+| `k` | `%%👍 ok%%` |
+| `n` | `%%❌ no%%` |
+| `r` | `%%🔁 rephrase more clearly%%` |
+
+A quick reply is a plain comment with an emoji verdict in front, so nothing new has to be taught to the
+LLM reading the file. Edit the list — keys, emoji, wording, any language — with `acemd.quickNotes`. Toolbar
+keys (`h`, `c`, `e`, `d`) always win, so pick something else for a quick reply.
+
+## Editing and Removing Annotations
+
+Hover an annotation in the preview to get a small action bar:
+
+- `%%comments%%` and quick replies: ✏️ edits the text (the input box opens pre-filled — submit it empty to
+  delete), ✖ removes the annotation.
+- `==highlights==` and `~~deletions~~`: ✖ removes the markers and keeps the text.
+
+`> [!EDIT]` blocks are not covered — use `Ctrl+Z` or **Clear All**.
 
 ## Install
 
@@ -82,6 +108,7 @@ Run `Cmd+Shift+P` → **"Ace: Copy AI Instructions"** to copy a ready-to-paste s
 | `acemd.headerFormat` | `markdown` | Instruction header format: `markdown` (visible callout) or `html` (hidden comment) |
 | `acemd.highlightColor` | `#fff3a0` | Background color for highlighted text |
 | `acemd.showAnnotationGutter` | `true` | Show annotation markers in the gutter |
+| `acemd.quickNotes` | `y ✅ yes`, `k 👍 ok`, `n ❌ no`, `r 🔁 rephrase more clearly` | One-keystroke canned comments: `key`, `emoji`, `text` per entry |
 
 ## Who It's For
 

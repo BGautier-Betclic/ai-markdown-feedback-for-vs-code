@@ -6,6 +6,7 @@
  */
 import MarkdownIt from 'markdown-it';
 import StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
+import { parseQuickNote } from '../annotations';
 
 export function commentPlugin(md: MarkdownIt): void {
   md.inline.ruler.before('emphasis', 'ace_comment', (state: StateInline, silent: boolean) => {
@@ -50,8 +51,13 @@ export function commentPlugin(md: MarkdownIt): void {
     const sourceLine = token.attrGet('data-source-line') || '';
     const sourcePos = token.attrGet('data-source-pos') || '';
     const sourceAttrs = sourceLine ? ` data-source-line="${sourceLine}" data-source-pos="${sourcePos}"` : '';
-    return `<span class="ace-comment" title="${content}" data-comment="${content}"${sourceAttrs}>` +
-      `<span class="ace-comment-icon">💬</span>` +
+    // A comment opening with an emoji is a quick reply — show that emoji as the
+    // icon instead of the generic 💬, so the verdict reads at a glance.
+    const quick = parseQuickNote(token.content);
+    const icon = quick ? md.utils.escapeHtml(quick.emoji) : '💬';
+    const className = quick ? 'ace-comment ace-comment--quick' : 'ace-comment';
+    return `<span class="${className}" title="${content}" data-comment="${content}"${sourceAttrs}>` +
+      `<span class="ace-comment-icon">${icon}</span>` +
       `<span class="ace-comment-text">${content}</span>` +
       `</span>`;
   };

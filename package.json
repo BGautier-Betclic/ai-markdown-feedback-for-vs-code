@@ -1,18 +1,18 @@
 {
   "name": "ai-markdown-feedback",
-  "displayName": "Ace: AI Markdown Feedback",
+  "displayName": "Ace: AI Markdown Feedback (local fork)",
   "description": "Annotate Markdown files in VS Code with structured feedback for Claude, Codex, and other LLMs — highlight, comment, suggest edits, and mark deletions.",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "license": "MIT",
-  "publisher": "AlfredNaayem",
+  "publisher": "brice",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/41fred/ai-markdown-feedback-for-vs-code"
+    "url": "https://github.com/BGautier-Betclic/ai-markdown-feedback-for-vs-code"
   },
-  "homepage": "https://github.com/41fred/ai-markdown-feedback-for-vs-code#readme",
+  "homepage": "https://github.com/BGautier-Betclic/ai-markdown-feedback-for-vs-code#readme",
   "bugs": {
-    "url": "https://github.com/41fred/ai-markdown-feedback-for-vs-code/issues"
+    "url": "https://github.com/BGautier-Betclic/ai-markdown-feedback-for-vs-code/issues"
   },
   "keywords": [
     "markdown",
@@ -33,7 +33,8 @@
     "Visualization"
   ],
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "onLanguage:skill"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -84,29 +85,29 @@
     "menus": {
       "editor/title": [
         {
-          "when": "resourceLangId == markdown",
+          "when": "resourceLangId == markdown || resourceLangId == skill",
           "command": "acemd.openPreview",
           "group": "navigation"
         }
       ],
       "editor/context": [
         {
-          "when": "resourceLangId == markdown && editorHasSelection",
+          "when": "(resourceLangId == markdown || resourceLangId == skill) && editorHasSelection",
           "command": "acemd.insertHighlight",
           "group": "aimd@1"
         },
         {
-          "when": "resourceLangId == markdown && editorHasSelection",
+          "when": "(resourceLangId == markdown || resourceLangId == skill) && editorHasSelection",
           "command": "acemd.insertComment",
           "group": "aimd@2"
         },
         {
-          "when": "resourceLangId == markdown && editorHasSelection",
+          "when": "(resourceLangId == markdown || resourceLangId == skill) && editorHasSelection",
           "command": "acemd.insertEdit",
           "group": "aimd@3"
         },
         {
-          "when": "resourceLangId == markdown && editorHasSelection",
+          "when": "(resourceLangId == markdown || resourceLangId == skill) && editorHasSelection",
           "command": "acemd.insertDelete",
           "group": "aimd@4"
         }
@@ -117,31 +118,31 @@
         "command": "acemd.openPreview",
         "key": "ctrl+k ctrl+v",
         "mac": "cmd+k cmd+v",
-        "when": "resourceLangId == markdown"
+        "when": "resourceLangId == markdown || resourceLangId == skill"
       },
       {
         "command": "acemd.insertHighlight",
         "key": "ctrl+k h",
         "mac": "cmd+k h",
-        "when": "editorTextFocus && resourceLangId == markdown && editorHasSelection"
+        "when": "editorTextFocus && (resourceLangId == markdown || resourceLangId == skill) && editorHasSelection"
       },
       {
         "command": "acemd.insertComment",
         "key": "ctrl+k c",
         "mac": "cmd+k c",
-        "when": "editorTextFocus && resourceLangId == markdown"
+        "when": "editorTextFocus && (resourceLangId == markdown || resourceLangId == skill)"
       },
       {
         "command": "acemd.insertEdit",
         "key": "ctrl+k e",
         "mac": "cmd+k e",
-        "when": "editorTextFocus && resourceLangId == markdown"
+        "when": "editorTextFocus && (resourceLangId == markdown || resourceLangId == skill)"
       },
       {
         "command": "acemd.insertDelete",
         "key": "ctrl+k d",
         "mac": "cmd+k d",
-        "when": "editorTextFocus && resourceLangId == markdown && editorHasSelection"
+        "when": "editorTextFocus && (resourceLangId == markdown || resourceLangId == skill) && editorHasSelection"
       }
     ],
     "configuration": {
@@ -177,6 +178,35 @@
           ],
           "description": "Format of the instruction header auto-inserted when the first annotation is added. Markdown is recommended because AI tools are more likely to follow visible instructions."
         },
+        "acemd.quickNotes": {
+          "type": "array",
+          "markdownDescription": "One-keystroke canned comments in the preview. Each entry needs a single-character `key`, an `emoji` (the verdict) and a `text`. Inserted as a normal comment, e.g. `%%✅ yes%%`. Keys already taken by the toolbar (`h`, `c`, `e`, `d`) are ignored.",
+          "default": [
+            { "key": "y", "emoji": "✅", "text": "yes" },
+            { "key": "k", "emoji": "👍", "text": "ok" },
+            { "key": "n", "emoji": "❌", "text": "no" },
+            { "key": "r", "emoji": "🔁", "text": "rephrase more clearly" }
+          ],
+          "items": {
+            "type": "object",
+            "required": ["key", "emoji", "text"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "maxLength": 1,
+                "description": "Single character pressed in the preview"
+              },
+              "emoji": {
+                "type": "string",
+                "description": "Emoji shown in the preview and stored at the start of the comment"
+              },
+              "text": {
+                "type": "string",
+                "description": "Comment text inserted after the emoji"
+              }
+            }
+          }
+        },
         "acemd.autoOpenMode": {
           "type": "string",
           "enum": ["side", "replace"],
@@ -193,6 +223,7 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "tsc -p ./",
+    "test": "tsc -p ./ && node --test out/annotations.test.js out/render.test.js",
     "watch": "tsc -watch -p ./",
     "package": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify"
   },

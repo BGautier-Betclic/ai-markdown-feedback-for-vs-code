@@ -3,8 +3,45 @@ import * as crypto from 'crypto';
 import MarkdownIt from 'markdown-it';
 import { highlightPlugin, commentPlugin, editSuggestionPlugin, deletionPlugin, sourceMapPlugin } from './plugins';
 import { getWebviewContent } from './webview/template';
+import {
+  deleteMarker,
+  formatQuickNote,
+  isAnnotatableLanguage,
+  MarkerKind,
+  replaceCommentText,
+  resolveMarkerRange,
+} from './annotations';
 
-type AnnotationKind = 'highlight' | 'comment' | 'edit' | 'delete';
+type AnnotationKind = 'highlight' | 'comment' | 'edit' | 'delete' | 'quick';
+
+/** A one-keystroke canned comment, configured via `acemd.quickNotes`. */
+export interface QuickNote {
+  key: string;
+  emoji: string;
+  text: string;
+}
+
+const DEFAULT_QUICK_NOTES: QuickNote[] = [
+  { key: 'y', emoji: '✅', text: 'yes' },
+  { key: 'k', emoji: '👍', text: 'ok' },
+  { key: 'n', emoji: '❌', text: 'no' },
+  { key: 'r', emoji: '🔁', text: 'rephrase more clearly' },
+];
+
+export function getQuickNotes(uri: vscode.Uri): QuickNote[] {
+  const configured = vscode.workspace
+    .getConfiguration('acemd', uri)
+    .get<QuickNote[]>('quickNotes', DEFAULT_QUICK_NOTES);
+  if (!Array.isArray(configured)) { return DEFAULT_QUICK_NOTES; }
+  return configured.filter((note) => note && typeof note.key === 'string' && note.key.length === 1);
+}
+
+/** Source text a quick reply inserts, resolved from the key that was pressed. */
+function quickNoteSource(uri: vscode.Uri, key: string | undefined): string | undefined {
+  if (!key) { return undefined; }
+  const note = getQuickNotes(uri).find((candidate) => candidate.key === key);
+  return note ? formatQuickNote(note.emoji, note.text) : undefined;
+}
 
 interface SourcePoint {
   line: number;   // 1-based
@@ -328,6 +365,7 @@ async function applyAnnotation(
   annotation: AnnotationKind,
   sourceRange: SourceRange,
   selectedText: string,
+  quickKey?: string,
 ): Promise<void> {
   const fullText = document.getText();
 
@@ -414,16 +452,18 @@ async function applyAnnotation(
     new vscode.Position(matchEndLine, matchEndCol),
   );
 
-  await applyEdit(document, annotation, matchRange, matchText);
+  await applyEdit(document, annotation, matchRange, matchText, quickKey);
 }
 
 /**
- * Insert a comment or edit suggestion at the end of a source line (no selection needed).
+ * Insert a comment, quick reply, or edit suggestion at the end of a source
+ * line (no selection needed).
  */
 async function applyAnnotationAtLine(
   document: vscode.TextDocument,
-  annotation: 'comment' | 'edit',
+  annotation: 'comment' | 'edit' | 'quick',
   sourceRange: SourceRange,
+  quickKey?: string,
 ): Promise<void> {
   const fullText = document.getText();
   const headerOffset = getHeaderLineCount(fullText);
@@ -435,7 +475,11 @@ async function applyAnnotationAtLine(
 
   const edit = new vscode.WorkspaceEdit();
 
-  if (annotation === 'comment') {
+  if (annotation === 'quick') {
+    const quick = quickNoteSource(document.uri, quickKey);
+    if (!quick) { return; }
+    edit.insert(document.uri, lineEnd, ` ${quick}`);
+  } else if (annotation === 'comment') {
     const comment = await vscode.window.showInputBox({
       prompt: 'Enter your comment (visible to LLMs, hidden in preview)',
       placeHolder: 'Your feedback here...',
@@ -481,6 +525,7 @@ async function applyEdit(
   annotation: AnnotationKind,
   matchRange: vscode.Range,
   _matchText: string,
+  quickKey?: string,
 ): Promise<void> {
   // Always read the actual source text at the match range — never trust
   // the webview's selected text, which may include rendering artifacts,
@@ -517,6 +562,13 @@ async function applyEdit(
       break;
     }
 
+    case 'quick': {
+      const quick = quickNoteSource(document.uri, quickKey);
+      if (!quick) { return; }
+      edit.insert(document.uri, matchRange.end, ` ${quick} `);
+      break;
+    }
+
     case 'edit': {
       const suggestion = await vscode.window.showInputBox({
         prompt: 'Enter your edit suggestion',
@@ -532,6 +584,114 @@ async function applyEdit(
   await ensureAnnotationHeader(document, edit);
 
   await applyWorkspaceEditAndSave(document, edit);
+}
+
+// --- Editing and removing an existing annotation ---
+
+/** What the preview knows about the annotation the reviewer is pointing at. */
+interface MarkerTarget {
+  kind: MarkerKind;
+  line: number;        // 1-based, relative to the header-stripped render
+  startColumn: number; // 1-based, half-open with endColumn
+  endColumn: number;
+  oldText: string;
+}
+
+/**
+ * Resolve a preview target to a real document line plus the marker's span
+ * inside it. Returns undefined (after warning) when the mapping can no longer
+ * be trusted — better to do nothing than to rewrite the wrong span.
+ */
+function locateMarker(
+  document: vscode.TextDocument,
+  target: MarkerTarget,
+): { line: vscode.TextLine; range: { start: number; end: number; content: string } } | undefined {
+  const headerOffset = getHeaderLineCount(document.getText());
+  const lineNumber = Math.min(
+    Math.max(0, target.line - 1 + headerOffset),
+    document.lineCount - 1,
+  );
+  const line = document.lineAt(lineNumber);
+  const range = resolveMarkerRange(
+    line.text,
+    target.startColumn,
+    target.endColumn,
+    target.kind,
+    target.oldText,
+  );
+
+  if (!range) {
+    vscode.window.showWarningMessage(
+      'Ace: Could not locate that annotation in the source — the file may have changed since the preview rendered. Save and retry.',
+    );
+    return undefined;
+  }
+
+  return { line, range };
+}
+
+async function replaceLine(
+  document: vscode.TextDocument,
+  line: vscode.TextLine,
+  newText: string,
+): Promise<void> {
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, line.range, newText);
+  await applyWorkspaceEditAndSave(document, edit);
+}
+
+/**
+ * Edit a comment (or quick reply) in place. The input box is pre-filled with
+ * the current text; submitting it empty removes the annotation, which is the
+ * same path as the delete button.
+ */
+async function editAnnotationAt(document: vscode.TextDocument, target: MarkerTarget): Promise<void> {
+  const located = locateMarker(document, target);
+  if (!located) { return; }
+
+  const next = await vscode.window.showInputBox({
+    prompt: 'Edit comment — submit an empty field to delete it',
+    value: located.range.content,
+    valueSelection: [0, located.range.content.length],
+  });
+
+  // Escape cancels; an empty submission means delete.
+  if (next === undefined) { return; }
+
+  const newLine = next.trim().length === 0
+    ? deleteMarker(located.line.text, located.range, target.kind)
+    : replaceCommentText(located.line.text, located.range, next);
+
+  await replaceLine(document, located.line, newLine);
+}
+
+/**
+ * Remove one annotation. Comments disappear; highlights and deletions are
+ * unwrapped, keeping their text.
+ *
+ * ponytail: a multi-paragraph highlight is stored as one `==…==` pair per
+ * block (see wrapParagraphBlocks), so this removes only the hovered block.
+ * Upgrade path if it ever annoys: walk adjacent blocks that were wrapped together.
+ */
+async function deleteAnnotationAt(document: vscode.TextDocument, target: MarkerTarget): Promise<void> {
+  const located = locateMarker(document, target);
+  if (!located) { return; }
+  await replaceLine(document, located.line, deleteMarker(located.line.text, located.range, target.kind));
+}
+
+/** Read a marker target off a webview message, rejecting malformed payloads. */
+function readMarkerTarget(message: any): MarkerTarget | undefined {
+  const kind = message?.kind;
+  if (kind !== 'comment' && kind !== 'highlight' && kind !== 'strike') { return undefined; }
+  const line = Number(message?.line);
+  if (!Number.isFinite(line) || line < 1) { return undefined; }
+  return {
+    kind,
+    line,
+    startColumn: Number(message?.startColumn) || 1,
+    endColumn: Number(message?.endColumn) || 1,
+    oldText: typeof message?.oldText === 'string' ? message.oldText : '',
+  };
 }
 
 /**
@@ -683,6 +843,7 @@ function renderToHtml(md: MarkdownIt, document: vscode.TextDocument, webview: vs
     showGutter,
     cspSource: webview.cspSource,
     nonce,
+    quickNotes: getQuickNotes(document.uri),
   });
 }
 
@@ -728,13 +889,27 @@ export class MarkdownPreviewEditorProvider implements vscode.CustomTextEditorPro
         case 'preview.applyAnnotation':
           if (message.range) {
             if (message.text) {
-              await applyAnnotation(document, message.annotation, message.range, message.text);
-            } else if (message.annotation === 'comment' || message.annotation === 'edit') {
-              // Comment/Edit can work without selection — insert at end of the source line
-              await applyAnnotationAtLine(document, message.annotation, message.range);
+              await applyAnnotation(document, message.annotation, message.range, message.text, message.quickKey);
+            } else if (
+              message.annotation === 'comment'
+              || message.annotation === 'edit'
+              || message.annotation === 'quick'
+            ) {
+              // Comment/Edit/Quick can work without selection — insert at end of the source line
+              await applyAnnotationAtLine(document, message.annotation, message.range, message.quickKey);
             }
           }
           return;
+        case 'preview.editAnnotation': {
+          const target = readMarkerTarget(message);
+          if (target) { await editAnnotationAt(document, target); }
+          return;
+        }
+        case 'preview.deleteAnnotation': {
+          const target = readMarkerTarget(message);
+          if (target) { await deleteAnnotationAt(document, target); }
+          return;
+        }
         case 'preview.clearAllAnnotations':
           await clearAllAnnotationsInDocument(document);
           return;
@@ -814,7 +989,7 @@ export class SidePanelPreviewProvider {
 
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
-        if (editor && editor.document.languageId === 'markdown' && this.panel) {
+        if (editor && isAnnotatableLanguage(editor.document.languageId) && this.panel) {
           this.document = editor.document;
           this.panel.title = `Ace: ${this.getShortName(editor.document.uri)}`;
           this.updatePreview();
@@ -830,12 +1005,28 @@ export class SidePanelPreviewProvider {
           case 'preview.applyAnnotation':
             if (message.range) {
               if (message.text) {
-                await applyAnnotation(this.document, message.annotation, message.range, message.text);
-              } else if (message.annotation === 'comment' || message.annotation === 'edit') {
-                await applyAnnotationAtLine(this.document, message.annotation, message.range);
+                await applyAnnotation(this.document, message.annotation, message.range, message.text, message.quickKey);
+              } else if (
+                message.annotation === 'comment'
+                || message.annotation === 'edit'
+                || message.annotation === 'quick'
+              ) {
+                await applyAnnotationAtLine(this.document, message.annotation, message.range, message.quickKey);
               }
             }
             return;
+
+          case 'preview.editAnnotation': {
+            const target = readMarkerTarget(message);
+            if (target) { await editAnnotationAt(this.document, target); }
+            return;
+          }
+
+          case 'preview.deleteAnnotation': {
+            const target = readMarkerTarget(message);
+            if (target) { await deleteAnnotationAt(this.document, target); }
+            return;
+          }
 
           case 'preview.clearAllAnnotations':
             await clearAllAnnotationsInDocument(this.document);

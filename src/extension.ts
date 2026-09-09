@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { MarkdownPreviewEditorProvider, SidePanelPreviewProvider, clearAllAnnotationsInDocument, ensureAnnotationHeader } from './preview-provider';
+import { isAnnotatableLanguage } from './annotations';
 
 let sidePanelProvider: SidePanelPreviewProvider;
 
@@ -15,6 +16,17 @@ When a file contains Ace reviewer annotations, treat them as intentional feedbac
 | \`%%comment%%\` | Inline reviewer feedback (hidden in preview, visible in source) |
 | \`~~deleted text~~\` | Suggested removal |
 | \`> [!EDIT] ...\` | Specific change request |
+
+## Quick replies
+
+A comment whose text opens with an emoji is a quick reply — a one-keystroke verdict on the passage
+that precedes it. It is a normal \`%%comment%%\`, so the rules below apply unchanged.
+
+| Marker | Meaning |
+|--------|---------|
+| \`%%✅ yes%%\`, \`%%👍 ok%%\` | Validated — nothing to change here |
+| \`%%❌ no%%\` | The preceding passage is rejected — fix it, or ask if the fix is not obvious |
+| \`%%🔁 rephrase more clearly%%\` | Rewrite the preceding passage more clearly |
 
 ## Rules
 
@@ -48,7 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('acemd.openPreview', () => {
       const editor = vscode.window.activeTextEditor;
-      if (editor && editor.document.languageId === 'markdown') {
+      if (editor && isAnnotatableLanguage(editor.document.languageId)) {
         sidePanelProvider.openPreview(editor.document);
       } else {
         vscode.window.showWarningMessage('Ace: Open a Markdown file first.');
@@ -113,7 +125,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('acemd.clearAllAnnotations', async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== 'markdown') {
+      if (!editor || !isAnnotatableLanguage(editor.document.languageId)) {
         vscode.window.showWarningMessage('Ace: Open a Markdown file first.');
         return;
       }
@@ -133,7 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
   let lastAutoOpenedKey: string | undefined;
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-      if (!editor || editor.document.languageId !== 'markdown') { return; }
+      if (!editor || !isAnnotatableLanguage(editor.document.languageId)) { return; }
 
       const config = vscode.workspace.getConfiguration('acemd', editor.document.uri);
       if (!config.get<boolean>('autoOpenPreview', false)) { return; }

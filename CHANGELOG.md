@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0
+
+Local fork. Annotations can now be answered in one keystroke, edited, and removed one at a time.
+
+- Add quick replies: press `y` / `k` / `n` / `r` in the preview to insert `%%✅ yes%%`, `%%👍 ok%%`,
+  `%%❌ no%%`, `%%🔁 rephrase more clearly%%`. A quick reply is a normal comment with an emoji verdict,
+  so no new syntax reaches the LLM. Configurable with the new `acemd.quickNotes` setting; a legend in the
+  toolbar shows the active keys
+- Add a hover action bar on existing annotations: ✏️ edits a comment (input box pre-filled; submit empty to
+  delete), ✖ removes a comment, or unwraps a `==highlight==` / `~~deletion~~` while keeping its text.
+  `> [!EDIT]` blocks are out of scope
+- Refuse to act when the preview's source mapping no longer matches the file (stale render), instead of
+  rewriting the wrong span — the marker range is verified, then searched by text, then given up on
+- Support the `skill` language id everywhere `markdown` was accepted, so annotations work on `SKILL.md`
+  files (VS Code puts those buffers in language mode `skill`). Ports a patch that previously existed only
+  inside the built `dist/extension.js` of local build 0.4.6
+- Add `src/annotations.ts` (pure, no `vscode` import) with the range/marker logic, plus `npm test`
+  (`node:test`, no new dependency) covering it and the annotation rendering the action bar depends on
+
 ## 0.4.4
 
 Preview screenshot refresh.
